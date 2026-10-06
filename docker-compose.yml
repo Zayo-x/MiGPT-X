@@ -1,0 +1,56 @@
+# MiGPT-X ——— 一条指令部署
+#
+#   docker compose up -d
+#
+# 然后用浏览器打开 http://<这台机器的局域网IP>:36593
+#
+# 想改代码就在这份文件里把 image 换成 build（见下面注释），
+# 再执行 docker compose up -d --build。
+
+services:
+  migpt-x:
+    image: ghcr.io/zayo-x/migpt-x:latest
+
+    # 从源码构建时把上面那行注释掉、把下面几行打开：
+    # build:
+    #   context: .
+    #   args:
+    #     # 国内网络换成镜像源，构建快很多（不写就走官方源）
+    #     NPM_REGISTRY: https://registry.npmmirror.com
+    #     PIP_INDEX: https://mirrors.aliyun.com/pypi/simple/
+    #     APT_MIRROR: mirrors.aliyun.com
+
+    container_name: migpt-x
+    restart: unless-stopped
+
+    # 只暴露控制台端口。TTS 微服务（36594）只在容器内部使用，
+    # 不需要也不应该暴露到局域网。
+    ports:
+      - "36593:36593"
+
+    # 全部运行时数据都在这个卷里：配置、登录缓存、生成的音频、日志。
+    # 删掉容器不会丢配置，重建镜像也不会。
+    volumes:
+      - migpt-data:/data
+
+    environment:
+      # 面板时区，让日志时间和你本地一致
+      - TZ=Asia/Shanghai
+      # 需要改端口时用这两行（改了记得同步上面的 ports 映射）
+      # - MIGPT_PORT=36593
+      # - MIGPT_TTS_PORT=36594
+
+    # ─────────────────────────────────────────────────────────
+    # 备选：改用 host 网络
+    #
+    # 好处是音箱端的「音频地址前缀」用 http://<局域网IP>:36593 一定通，
+    # 不用管 docker 的端口映射；坏处是端口会直接占用宿主机端口，
+    # 而且 host 网络在 Docker Desktop（Windows/Mac）上不可用。
+    #
+    # 用的时候记得把上面的 ports: 整段删掉，两者不能共存。
+    #
+    # network_mode: host
+    # ─────────────────────────────────────────────────────────
+
+volumes:
+  migpt-data:

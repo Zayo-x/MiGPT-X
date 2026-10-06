@@ -1,0 +1,50 @@
+# ─────────────────────────────────────────────────────────────
+# 构建上下文排除清单
+#
+# ⚠️ 最重要的两条：editable.json 和 .mi.json
+#    它们装着小米账号的 passToken、大模型 API Key、MiMo Key，
+#    一旦进入构建上下文就有被 COPY 进镜像的风险。密钥只能通过
+#    /data 挂载卷注入，绝不能烤进镜像层。
+# ─────────────────────────────────────────────────────────────
+
+# 密钥与运行时状态
+editable.json
+editable.json.*
+.mi.json
+mi.json
+backups/
+no-restart
+chat-mode
+cmd.json
+control/
+*.log
+
+# 依赖与构建产物：容器里会自己装、自己编译，
+# 若把宿主机的拷进去会污染架构（宿主机是 x64 原生模块，镜像可能是 arm64）
+node_modules
+**/node_modules
+**/dist
+.turbo
+
+# 版本控制与编辑器
+.git
+.gitignore
+.github
+.vscode
+.idea
+*.swp
+
+# 备份与临时文件
+*.bak
+*.bak-*
+*.pre-*.bak
+*.tmp
+.DS_Store
+
+# 面板的运行时产物（生成的音频、日志），由 /data 卷在运行时提供
+panel/tts/
+panel/*.log
+panel/control/
+
+# 文档与本地脚本（运行时用不到）
+README.upstream.md

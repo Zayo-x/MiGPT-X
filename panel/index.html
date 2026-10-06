@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>MiGPT-X · 小爱音箱控制台</title>
+<style>
+  :root {
+    --bg: #0a0c11;
+    --card: rgba(255,255,255,.035);
+    --card-hi: rgba(255,255,255,.06);
+    --line: rgba(255,255,255,.085);
+    --line-hi: rgba(255,255,255,.16);
+    --tx: #e9ecf1;
+    --tx-2: #a8b2c1;
+    --tx-3: #8b95a6;          /* 原 #6b7686 对比度仅 4.25，不达标 → 提到 5.6 */
+    --red: #e11d48;
+    --red-2: #f43f5e;
+    --red-tx: #fb7185;        /* 红色当文字用的版本（--red 当文字只有 4.16） */
+    --gold: #f0b429;
+    --green: #22c55e;
+    --blue: #60a5fa;
+    --dot-off: #79828f;       /* 关闭状态的圆点：原 #4b5563 只有 2.59，太暗 */
+    --t: .18s cubic-bezier(.4, 0, .2, 1);
+    --radius: 14px;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0;
+      scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.18) transparent; }
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.15); border-radius: 5px;
+      border: 2px solid transparent; background-clip: content-box; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.28); background-clip: content-box; }
+  ::selection { background: rgba(244,63,94,.34); color: #fff; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    background: var(--bg);
+    background-image:
+      radial-gradient(900px 500px at 12% -8%, rgba(225,29,72,.13), transparent 62%),
+      radial-gradient(800px 460px at 92% 4%, rgba(240,180,41,.09), transparent 60%),
+      radial-gradient(700px 500px at 50% 108%, rgba(96,165,250,.07), transparent 62%);
+    background-attachment: fixed;
+    color: var(--tx);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    padding: 22px 18px 60px;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+
+  /* ---------- 顶栏 ---------- */
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 14px;
+    flex-wrap: wrap; margin-bottom: 20px; }
+  .brand { display: flex; align-items: center; gap: 13px; }
+  h1 { font-size: 19px; font-weight: 700; letter-spacing: .3px; line-height: 1.35; }
+  h1 .h1sub { font-size: 13px; font-weight: 500; color: var(--tx-3); letter-spacing: 0; }
+  .sub { font-size: 12px; color: var(--tx-3); margin-top: 3px; letter-spacing: .4px; }
+  .badge { display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12.5px; padding: 7px 15px; border-radius: 999px; font-weight: 700;
+    white-space: nowrap; backdrop-filter: blur(8px); transition: var(--t); }
+  .badge::before { content: ''; width: 7px; height: 7px; border-radius: 50%;
+    background: currentColor; flex: 0 0 auto; }
+  .badge.on  { background: rgba(34,197,94,.14);  color: #4ade80; border: 1px solid rgba(34,197,94,.4);
+    box-shadow: 0 0 22px rgba(34,197,94,.18); }
+  .badge.on::before { animation: bpulse 2.2s ease-in-out infinite; }
+  .badge.off { background: rgba(239,68,68,.14); color: #f87171; border: 1px solid rgba(239,68,68,.4); }
+  @keyframes bpulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+
+  /* ---------- 卡片 ---------- */
+  .card { background: linear-gradient(180deg, rgba(255,255,255,.05), var(--card) 58%);
+    border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 20px; margin-bottom: 16px; backdrop-filter: blur(14px);
+    box-shadow: 0 10px 34px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.045); }
+  h2 { font-size: 13px; font-weight: 700; color: var(--tx-2); letter-spacing: .8px;
+    margin-bottom: 15px; display: flex; align-items: center; gap: 7px; }
+
+  /* ---------- 状态格 ---------- */
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(136px, 1fr));
+    gap: 11px; margin-bottom: 17px; }
+  .cell { background: rgba(255,255,255,.028); border: 1px solid var(--line);
+    border-radius: 11px; padding: 12px 14px; transition: var(--t); }
+  .cell:hover { background: var(--card-hi); border-color: var(--line-hi); transform: translateY(-1px); }
+  .cell .k { font-size: 11px; color: var(--tx-3); letter-spacing: .5px; font-weight: 600;
+    display: block; margin-bottom: 4px; }
+  .cell .v { font-size: 15px; font-weight: 600; word-break: break-all;
+    font-family: var(--mono); font-variant-numeric: tabular-nums; line-height: 1.45; }
+
+  /* ---------- 按钮 ---------- */
+  .btns { display: flex; gap: 9px; flex-wrap: wrap; }
+  button { font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+    border: 1px solid var(--line-hi); background: rgba(255,255,255,.05); color: var(--tx);
+    padding: 10px 16px; border-radius: 10px; transition: var(--t); white-space: nowrap;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.05); }
+  button:hover:not(:disabled) { background: rgba(255,255,255,.11); transform: translateY(-1px);
+    box-shadow: 0 5px 16px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.07); }
+  button:active:not(:disabled) { transform: translateY(0) scale(.985);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.05); }
+  button:disabled { opacity: .42; cursor: not-allowed; transform: none; }
+  button:focus-visible, .tab:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--red-2); outline-offset: 2px; }
+  button.primary { background: linear-gradient(135deg, var(--red), #b91c3c);
+    border-color: rgba(244,63,94,.55); color: #fff;
+    box-shadow: 0 4px 18px rgba(225,29,72,.32); }
+  button.primary:hover:not(:disabled) { box-shadow: 0 6px 24px rgba(225,29,72,.45); }
+  button.warn { background: rgba(240,180,41,.14); border-color: rgba(240,180,41,.42); color: #fcd34d; }
+  button.warn:hover:not(:disabled) { background: rgba(240,180,41,.22); }
+  button.danger { background: rgba(239,68,68,.13); border-color: rgba(239,68,68,.4); color: #fca5a5; }
+  button.danger:hover:not(:disabled) { background: rgba(239,68,68,.22); }
+
+  /* ---------- 提示条 ---------- */
+  .msg { font-size: 12.5px; margin-top: 12px; min-height: 16px; color: var(--tx-3);
+    font-family: var(--mono); white-space: pre-wrap; word-break: break-word; line-height: 1.7; }
+  .msg.ok  { color: #4ade80; }
+  .msg.err { color: #f87171; }
+  .hint { font-size: 12px; color: var(--tx-3); margin-top: 11px; line-height: 1.75; }
+  .hint b, .hint strong { color: var(--tx-2); }
+
+  /* 连续聊天模式 */
+  .modebar { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    flex-wrap: wrap; margin-top: 15px; padding: 13px 16px; border-radius: 12px;
+    background: rgba(255,255,255,.028); border: 1px solid var(--line); transition: var(--t); }
+  .modebar.on { background: linear-gradient(135deg, rgba(34,197,94,.13), rgba(34,197,94,.05));
+    border-color: rgba(34,197,94,.45); box-shadow: 0 0 24px rgba(34,197,94,.14); }
+  .modeinfo { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; font-size: 13px; }
+  .modeinfo .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--dot-off);
+    transition: var(--t); flex: 0 0 auto; }
+  .modebar.on .modeinfo .dot { background: var(--green); box-shadow: 0 0 10px var(--green);
+    animation: bpulse 2.2s ease-in-out infinite; }
+  .modeinfo .mt { font-weight: 600; }
+  .modehint { font-size: 11.5px; color: var(--tx-3); }
+  .modebtns { display: flex; gap: 8px; flex: 0 0 auto; }
+  .modebtns button { white-space: nowrap; }
+  @media (max-width: 620px) { .modehint { display: none; } }
+
+  /* 📋 音箱适配列表（在「音箱连接」页顶部） */
+  .subcard { margin: 0 0 22px; padding: 0 0 10px; border-bottom: 1px solid var(--line); }
+  .mdl > summary { cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--tx-2);
+    list-style: none; padding: 10px 2px; user-select: none; transition: var(--t); }
+  .mdl > summary::-webkit-details-marker { display: none; }
+  .mdl > summary::before { content: '▸ '; color: var(--tx-3); }
+  .mdl[open] > summary::before { content: '▾ '; }
+  .mdl > summary:hover { color: var(--tx); }
+  .hint2 { font-size: 11.5px; font-weight: 400; color: var(--tx-3); }
+  .mdlbody { padding: 2px 0 4px; }
+  .mtbl { width: 100%; border-collapse: collapse; font-size: 12px;
+    max-height: 280px; display: block; overflow: auto; }
+  .mtbl thead th { position: sticky; top: 0; background: #171a22; z-index: 1;
+    text-align: left; font-weight: 600; color: var(--tx-3); font-size: 11px;
+    padding: 8px 9px; border-bottom: 1px solid var(--line);
+    white-space: nowrap; letter-spacing: .3px; }
+  .mtbl td { padding: 7px 9px; border-bottom: 1px solid rgba(255,255,255,.05);
+    color: var(--tx-2); vertical-align: middle; }
+  .mtbl tbody tr:hover { background: rgba(255,255,255,.03); }
+  .mtbl tr.mine { background: rgba(34,197,94,.1); }
+  .mtbl tr.mine td { color: var(--tx); }
+  .mtbl code { font-family: var(--mono); font-size: 11px;
+    background: rgba(255,255,255,.06); padding: 1px 5px; border-radius: 4px; color: var(--tx); }
+  .mtag { font-size: 10.5px; padding: 2px 7px; border-radius: 20px; white-space: nowrap; }
+  .mtag.ok   { background: rgba(34,197,94,.16);  color: #4ade80; }
+  .mtag.part { background: rgba(240,180,41,.16); color: var(--gold); }
+  .mtag.no   { background: rgba(225,29,72,.16);  color: #fb7185; }
+  .yours { font-size: 10.5px; padding: 2px 7px; border-radius: 20px;
+    background: rgba(34,197,94,.2); color: #4ade80; margin-left: 3px; white-space: nowrap; }
+  button.mini { padding: 4px 11px; font-size: 11.5px; border-radius: 7px; }
+  .mmsg { font-size: 12px; color: var(--tx-3); margin-top: 10px; line-height: 1.75; }
+  .mmsg.ok { color: #4ade80; }
+  .mmsg code { font-family: var(--mono); background: rgba(255,255,255,.08);
+    padding: 1px 5px; border-radius: 4px; }
+
+  /* ---------- 标签页 ---------- */
+  .tabs { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 20px;
+    padding-bottom: 15px; border-bottom: 1px solid var(--line); }
+  .tab { font-size: 12.5px; font-weight: 600; padding: 8px 15px; border-radius: 999px;
+    border: 1px solid transparent; background: rgba(255,255,255,.045); color: var(--tx-2);
+    cursor: pointer; transition: var(--t); white-space: nowrap; }
+  .tab:hover { background: rgba(255,255,255,.1); color: var(--tx); transform: translateY(-1px); }
+  .tab.on { background: linear-gradient(135deg, rgba(225,29,72,.92), rgba(185,28,60,.92));
+    color: #fff; border-color: rgba(244,63,94,.55);
+    box-shadow: 0 4px 16px rgba(225,29,72,.34); transform: none; }
+  .pane { display: none; animation: fade .22s ease; }
+  .pane.on { display: block; }
+  @keyframes fade { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+
+  /* ---------- 表单 ---------- */
+  #form label { display: block; font-size: 12.5px; color: var(--tx-2); font-weight: 600;
+    margin: 17px 0 7px; }
+  #form label .tip { font-weight: 400; color: var(--tx-3); margin-left: 7px; font-size: 11.5px;
+    line-height: 1.6; }
+  #form label .tip.block { display: block; margin: 5px 0 0; font-size: 11.5px; line-height: 1.65; }
+  input[type=text], input[type=password], input[type=number], textarea, select {
+    width: 100%; font-family: inherit; font-size: 13px; line-height: 1.6;
+    background: rgba(0,0,0,.34); color: var(--tx); border: 1px solid var(--line-hi);
+    border-radius: 10px; padding: 11px 13px; outline: none; transition: var(--t); }
+  input:hover:not(:focus), textarea:hover:not(:focus), select:hover:not(:focus) {
+    border-color: rgba(255,255,255,.24); }
+  input:focus, textarea:focus, select:focus {
+    border-color: rgba(244,63,94,.68); background: rgba(0,0,0,.5);
+    box-shadow: 0 0 0 3px rgba(225,29,72,.14); }
+  textarea { resize: vertical; min-height: 210px;
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.75; }
+  select { cursor: pointer; appearance: none;
+    background-image: linear-gradient(45deg, transparent 50%, var(--tx-3) 50%),
+                      linear-gradient(135deg, var(--tx-3) 50%, transparent 50%);
+    background-position: calc(100% - 19px) 50%, calc(100% - 14px) 50%;
+    background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; padding-right: 36px; }
+  .row { display: flex; gap: 9px; align-items: stretch; }
+  .row input { flex: 1; }
+  .eye { flex: 0 0 46px; padding: 0; font-size: 15px; border-radius: 10px; }
+
+  .chk { display: flex !important; align-items: flex-start; gap: 11px; cursor: pointer;
+    background: rgba(255,255,255,.028); border: 1px solid var(--line); border-radius: 11px;
+    padding: 12px 14px; margin: 9px 0 !important; transition: var(--t); }
+  .chk:hover { background: var(--card-hi); border-color: var(--line-hi); }
+  .chk input { flex: 0 0 auto; width: 17px; height: 17px; margin-top: 2px;
+    accent-color: var(--red-2); cursor: pointer; }
+  .chk .ct { flex: 1; font-size: 12.5px; color: var(--tx); }
+  .chk .tip { display: block; font-weight: 400; font-size: 11.5px; color: var(--tx-3);
+    margin: 4px 0 0 !important; line-height: 1.6; }
+
+  .kwtag { display: inline-block; background: rgba(225,29,72,.14); color: #fda4af;
+    border: 1px solid rgba(244,63,94,.28); border-radius: 7px; padding: 3px 10px;
+    font-size: 12px; margin: 0 5px 5px 0; font-weight: 600; }
+
+  /* 触发词：匹配方式开关 */
+  .kwmode { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 11px; }
+  .kmlab { font-size: 12px; font-weight: 600; color: var(--tx-3); }
+  .seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 9px;
+    background: rgba(0,0,0,.36); border: 1px solid var(--line-hi); }
+  .seg button { border: none; background: transparent; box-shadow: none; color: var(--tx-3);
+    padding: 5px 12px; font-size: 12px; font-weight: 600; border-radius: 7px; }
+  .seg button:hover:not(.on) { background: rgba(255,255,255,.07); color: var(--tx-2);
+    transform: none; box-shadow: none; }
+  .seg button.on { background: linear-gradient(135deg, rgba(225,29,72,.92), rgba(185,28,60,.92));
+    color: #fff; box-shadow: 0 2px 10px rgba(225,29,72,.3); }
+
+  /* 触发词：一栏一个 */
+  .kwlist { display: flex; flex-direction: column; gap: 8px; margin-top: 2px; }
+  .kwrow { display: flex; gap: 8px; align-items: stretch; animation: fade .18s ease; }
+  .kwrow .kwitem { flex: 1; font-family: inherit; }
+  .kwrow .kwdel { flex: 0 0 44px; padding: 0; font-size: 18px; line-height: 1;
+    color: #f87171; font-weight: 400; }
+  .kwrow .kwdel:hover { background: rgba(239,68,68,.18); border-color: rgba(239,68,68,.5); }
+  .kwfoot { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 11px; }
+  .kwadd { font-size: 12.5px; padding: 9px 15px; border-style: dashed;
+    background: rgba(225,29,72,.07); border-color: rgba(244,63,94,.35); color: #fda4af; }
+  .kwadd:hover { background: rgba(225,29,72,.16); }
+  .kwall { display: flex !important; align-items: center; gap: 8px; margin: 0 !important;
+    font-size: 12.5px !important; font-weight: 500 !important; color: var(--tx-3) !important;
+    cursor: pointer; }
+  .kwall input { width: 16px; height: 16px; accent-color: var(--gold); cursor: pointer; }
+
+  .sec { font-size: 12px; font-weight: 700; color: var(--blue); letter-spacing: .8px;
+    margin: 23px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+  .sec:first-child { margin-top: 0; }
+
+  .dirty { color: var(--gold); font-size: 12.5px; margin-top: 13px; display: none;
+    font-weight: 600; }
+  .dirty.show { display: block; animation: fade .2s; }
+  .ver { font-size: 11px; font-weight: 700; color: var(--gold);
+    background: rgba(240,180,41,.13); border: 1px solid rgba(240,180,41,.32);
+    border-radius: 999px; padding: 2px 9px; margin-left: 6px; letter-spacing: 0; }
+
+  /* ---------- 对话 ---------- */
+  .chat { max-height: 440px; overflow-y: auto; font-size: 13px; padding-right: 6px; }
+  .ln { display: flex; gap: 11px; padding: 10px 5px; border-bottom: 1px solid rgba(255,255,255,.045);
+    align-items: flex-start; border-radius: 7px; transition: background var(--t); }
+  .ln:hover { background: rgba(255,255,255,.028); }
+  .ln:last-child { border-bottom: none; }
+  .ln .t { color: var(--tx-3); font-size: 11px; font-family: var(--mono);
+    flex: 0 0 58px; padding-top: 2px; letter-spacing: -.2px;
+    font-variant-numeric: tabular-nums; }
+  .ln .x { flex: 1; word-break: break-word; }
+  .heard  { color: #7dd3fc; }
+  .said   { color: #4ade80; font-weight: 500; }
+  .native { color: #fdba74; }
+  .warnln { color: #fcd34d; font-size: 12px; }
+  .sys    { color: var(--tx-3); font-size: 12.5px; }
+  .empty  { color: var(--tx-3); font-size: 13px; padding: 28px 0; text-align: center; }
+
+  code { background: rgba(0,0,0,.42); padding: 2px 7px; border-radius: 6px;
+    font-size: 12px; color: #93c5fd; font-family: var(--mono); }
+
+  footer { text-align: center; color: var(--tx-3); font-size: 12px;
+    margin-top: 28px; line-height: 1.9; }
+  footer b { color: var(--tx-2); }
+  footer a { color: var(--tx-2); text-decoration: none; border-bottom: 1px dotted var(--tx-3); }
+  footer a:hover { color: var(--tx); border-bottom-color: var(--tx-2); }
+
+  @media (max-width: 560px) {
+    body { padding: 15px 12px 46px; }
+    h1 { font-size: 16.5px; }
+    .card { padding: 15px; border-radius: 12px; }
+    .tab { padding: 7px 12px; font-size: 12px; }
+    button { padding: 9px 13px; font-size: 12.5px; }
+    .cell .v { font-size: 13.5px; }
+    .ln .t { flex: 0 0 46px; font-size: 10.5px; }
+    .modebar { padding: 12px; }
+    .modebtns { width: 100%; }
+    .modebtns button { flex: 1; }
+  }
+
+  /* 尊重系统的「减少动态效果」设置 */
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after {
+      animation-duration: .01ms !important; animation-iteration-count: 1 !important;
+      transition-duration: .01ms !important; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <div class="brand">
+      <div>
+        <h1>MiGPT-X <span class="h1sub">小爱音箱控制台</span></h1>
+        <div class="sub">MiGPT-X v1.0.0 · 全量配置在线编辑</div>
+      </div>
+    </div>
+    <div id="badge" class="badge off">加载中…</div>
+  </div>
+
+  <div class="card">
+    <div class="grid">
+      <div class="cell"><span class="k">服务</span><span class="v" id="svc">—</span></div>
+      <div class="cell"><span class="k">PID</span><span class="v" id="pid">—</span></div>
+      <div class="cell"><span class="k">启动于</span><span class="v" id="since">—</span></div>
+      <div class="cell"><span class="k">运行时长</span><span class="v" id="uptime">—</span></div>
+    </div>
+    <div class="btns">
+      <button id="b-restart" class="primary">🔄 重启服务</button>
+      <button id="b-start">▶️ 启动服务</button>
+      <button id="b-stop" class="warn">⏹ 停止服务</button>
+      <button id="b-silence" class="danger">🔇 强制静音音箱</button>
+    </div>
+    <div id="msg" class="msg"></div>
+
+    <div class="modebar" id="modebar">
+      <div class="modeinfo">
+        <span class="dot"></span>
+        <span class="mt" id="modetext">连续聊天模式：关闭</span>
+        <span class="modehint">对音箱说「开始聊天」进入 ·「结束聊天」退出</span>
+      </div>
+      <div class="modebtns">
+        <button id="b-wakeup" title="让音箱立刻回到「听」的状态，之后可以不喊小爱同学直接说话">👂 唤醒音箱</button>
+        <button id="b-mode">开启</button>
+      </div>
+    </div>
+    <div class="hint">🔇 <b>强制静音</b> = 直接命令音箱停止播放，不影响服务运行 —— 被小爱原生节目缠住时用这个。</div>
+  </div>
+
+  <div class="card">
+    <h2>✏️ 全部配置 <span class="ver" id="fcount">…</span></h2>
+    <div class="tabs" id="tabs"></div>
+    <div id="form"></div>
+
+    <div id="dirty" class="dirty">● 有未保存的修改</div>
+
+    <div class="btns" style="margin-top:16px">
+      <button id="b-save" class="primary">💾 保存并重启</button>
+      <button id="b-reload">↩️ 放弃修改</button>
+      <button id="b-rollback" class="warn">⏪ 回滚到上一次</button>
+    </div>
+    <div id="emsg" class="msg"></div>
+    <div class="hint">保存流程：校验字段 → 自动备份（保留最近 20 份）→ 原子写入 → 重启引擎 → 检查启动日志。</div>
+  </div>
+
+  <div class="card">
+    <h2>💬 最近对话</h2>
+    <div id="chat" class="chat"><div class="empty">加载中…</div></div>
+    <div class="hint">🔥 它听到的　🔊 AI 说的　🔈 保留的原生回答　⚠️ 警告　（每 3 秒自动刷新）</div>
+  </div>
+
+  <footer>
+    <b>MiGPT-X</b> · 面板地址 <span id="panel-origin">—</span> · 仅限局域网访问<br>
+    对话引擎 / 控制台面板 / TTS 微服务 —— systemd 或容器内托管
+  </footer>
+  <script>
+    // 显示当前实际的访问地址，而不是写死某台机器的内网 IP
+    document.getElementById('panel-origin').textContent = location.origin;
+  </script>
+
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const get = (o, p) => p.split('.').reduce((x, k) => (x == null ? undefined : x[k]), o);
+function set(o, p, v) {
+  const ks = p.split('.'), last = ks.pop();
+  let t = o;
+  for (let i = 0; i < ks.length; i++) {
+    const k = ks[i];
+    // 下一段是纯数字（如 ttsAction.0）时，当前层要建成数组而不是对象
+    const nextIsIndex = /^\d+$/.test(ks[i + 1] || last);
+    if (t[k] == null || typeof t[k] !== 'object') t[k] = nextIsIndex ? [] : {};
+    t = t[k];
+  }
+  t[last] = v;
+}
+
+// ---------------- 表单定义 ----------------
+const SCHEMA = [
+  { sec: '🔊 音箱连接' },
+  { p: 'speaker.did', l: '设备 ID', k: 'text', tip: '获取方式：直接填音箱名称也行（如「小爱音箱Play」），MAC 地址和数字 ID 都能识别；数字 ID 打开「调试日志」重启引擎，启动日志的设备列表里就有' },
+  { p: 'speaker.userId', l: '小米账号 userId', k: 'text', tip: '获取方式：浏览器登录 account.xiaomi.com，进「个人信息」→「小米 ID」，那串纯数字就是（不是手机号，也不是邮箱）' },
+  { p: 'speaker.passToken', l: 'passToken', k: 'secret', tip: '获取方式：浏览器登录小米账号 → 按 F12 → Application → Cookies → 复制 account.xiaomi.com 下的 passToken 整段（很长，约 370 字符）。官方图文教程：github.com/idootop/migpt-next/issues/4' },
+  { p: 'speaker.heartbeat', l: '轮询间隔 (ms)', k: 'number', tip: '越小响应越快、请求越频繁；建议 300~1000' },
+
+  { sec: '🤖 AI 模型' },
+  { p: 'openai.baseURL', l: 'API 地址', k: 'text', tip: '需以 http:// 或 https:// 开头' },
+  { p: 'openai.apiKey', l: 'API Key', k: 'secret' },
+  { p: 'openai.model', l: '模型名', k: 'text' },
+  { p: 'openai.disableThinking', l: '关闭思考模式', k: 'bool', tip: '推理模型专用，可显著降低首字延迟' },
+  { p: 'openai.enableProxy', l: '走代理', k: 'bool', tip: '国内直连不需要开' },
+  { p: 'openai.timeout', l: '请求超时 (ms)', k: 'number' },
+
+  { sec: '💬 对话行为' },
+  { p: 'callAIKeywords', l: '触发词', k: 'kw', tip: '含这些词的对话才交给 AI。点「＋ 添加触发词」一栏一个' },
+  { p: 'placeholder', l: '占位语', k: 'text', tip: '调 AI 前先播的话（≤30 字），用来抢占语音通道。留空则不播' },
+  { p: 'persona', l: '人设', k: 'textarea', tip: '系统提示词，决定性格和说话风格' },
+  { p: 'reStopBeforeReply', l: '回复前再清一次原生队列', k: 'bool', tip: '防止小米音频节目在 TTS 播完后自动续播' },
+  { p: 'keepNativeAnswer', l: '保留小爱原生回答', k: 'bool', tip: '开启后小爱答得上就不调 AI（省 token），但 AI 基本不接管了' },
+
+  { sec: '🎙️ 播报音色（外接 TTS）' },
+  { p: 'tts.enabled', l: '使用外接 TTS', k: 'bool', tip: '关闭则用音箱内置语音' },
+  { p: 'tts.engine', l: 'TTS 引擎', k: 'select', opts: [['clone', '小米 MiMo 复刻音色（最像原声 · 3~25 秒 · 需 Key）'], ['mimo', '小米 MiMo 文字描述音色（约 1.5 秒 · 需 Key）'], ['edge', '微软 edge-tts（免费免 Key · 约 1.3 秒 · 音色多）']], tip: '换引擎后点保存即生效。微软引擎不花钱、最快；MiMo 复刻最像原声，但延迟波动大（实测 2~25 秒）' },
+  { p: 'tts.voice', l: '微软音色', k: 'select', opts: [['zh-CN-XiaoxiaoNeural', '晓晓 · 女声（活泼，默认）'], ['zh-CN-XiaoyiNeural', '晓伊 · 女声（温柔）'], ['zh-CN-YunxiNeural', '云希 · 男声（年轻）'], ['zh-CN-YunjianNeural', '云健 · 男声（浑厚，解说风）'], ['zh-CN-YunyangNeural', '云扬 · 男声（专业播报）'], ['zh-CN-YunxiaNeural', '云夏 · 男声（少年）'], ['zh-CN-liaoning-XiaobeiNeural', '晓北 · 女声（东北话）'], ['zh-CN-shaanxi-XiaoniNeural', '晓妮 · 女声（陕西话）']], tip: '仅「微软 edge-tts」引擎使用。配大佐人设可以试 云健（浑厚命令口吻）或 晓北（东北话）' },
+  { p: 'tts.speed', l: '语速倍率', k: 'number', tip: '1 = 原速，1.5 = 1.5 倍速。小米引擎用 atempo 变速，微软引擎用 edge 自带 rate，两者音调都不变' },
+  { p: 'tts.cloneRef', l: '参考音频路径', k: 'text', tip: '仅 clone 模式使用，读取此文件作为音色样本，实测 7 秒最佳' },
+  { p: 'tts.cloneTimeout', l: '复刻超时（秒）', k: 'number', tip: '仅 clone 模式。超过这个时间就回退到描述音色。复刻实测 2~25 秒波动，调大更保真但更慢' },
+  { p: 'tts.cloneFallbackStyle', l: '复刻超时的回退风格', k: 'text', tip: '仅 clone 模式。复刻超过设定时间会自动改用这个文字描述生成，防止卡死' },
+  { p: 'tts.mimoStyle', l: '风格指令', k: 'text', tip: '仅 mimo 模式使用，自然语言描述音色，如「日本军官，低沉沙哑，命令口吻」' },
+  { p: 'tts.mimoModel', l: 'MiMo 模型', k: 'select', opts: [['mimo-v2.5-tts-voicedesign', 'voicedesign — 用文字设计音色（推荐）'], ['mimo-v2.5-tts', 'tts — 内置音色 + 风格指令']], tip: 'voicedesign 用风格指令造音色；tts 用内置音色' },
+  { p: 'tts.mimoApiKey', l: 'MiMo API Key', k: 'secret', tip: '小米 MiMo 开放平台的 key。用微软引擎时不需要它' },
+  { p: 'tts.fallbackToBuiltin', l: '生成失败时回退内置语音', k: 'bool', tip: '网络异常时保证不会变哑巴' },
+  { p: 'tts.baseUrl', l: '音频地址前缀', k: 'text', tip: '音箱从这个地址拉音频，必须是音箱能访问到的地址' },
+
+  { sec: '⚙️ 其它' },
+  { p: 'historyMaxLength', l: '历史对话条数', k: 'number', tip: '带多少条上下文，越大越慢' },
+  { p: 'maxReplyLength', l: '最大回复长度', k: 'number', tip: '流式输出字数上限' },
+  { p: 'debug', l: '调试日志', k: 'bool' },
+
+  { sec: '🔧 高级' },
+  { p: 'ttsAction.0', l: 'TTS 动作 siid', k: 'number', tip: '音箱「播放文本」的服务 ID。LX05 = 5 / 1；L05B 等可能是 5 / 3' },
+  { p: 'ttsAction.1', l: 'TTS 动作 aiid', k: 'number' },
+  { p: 'wakeUpAction.0', l: '唤醒动作 siid', k: 'number', tip: '连续对话的补唤醒指令 siid。原版 MiGPT 的 wakeUpCommand。LX05 / LX06 / S12 = 5' },
+  { p: 'wakeUpAction.1', l: '唤醒动作 aiid', k: 'number', tip: 'LX05 / LX06 / S12 = 3；OH2P / L15A 等 = 1' },
+];
+
+// 🔊 原版 MiGPT 官方音箱适配列表（docs/compatibility.md）
+// tier: ok=完美运行（支持连续对话） partial=正常运行（不支持连续对话） no=完全不支持
+const MODELS = [
+  { tier: 'ok', name: 'Xiaomi 智能音箱 Pro', id: 'OH2P', tts: [7, 3], wake: [7, 1], play: '' },
+  { tier: 'ok', name: 'Xiaomi 智能音箱', id: 'OH2', tts: [5, 3], wake: [5, 1], play: '[3, 1, 1]' },
+  { tier: 'ok', name: '小爱音箱 Pro', id: 'LX06', tts: [5, 1], wake: [5, 3], play: '' },
+  { tier: 'ok', name: '小米 AI 音箱', id: 'S12', tts: [5, 1], wake: [5, 3], play: '' },
+  { tier: 'ok', name: '小米 AI 音箱（第二代）', id: 'L15A', tts: [7, 3], wake: [7, 1], play: '[3, 1, 1]' },
+  { tier: 'ok', name: '小爱音箱 万能遥控版', id: 'LX5A', tts: [5, 1], wake: [5, 3], play: '' },
+  { tier: 'ok', name: '小爱音箱 Play（2019 款）', id: 'LX05', tts: [5, 1], wake: [5, 3], play: '[3, 1, 1]', mine: true },
+  { tier: 'ok', name: '小爱智能家庭屏 10', id: 'X10A', tts: [7, 3], wake: [7, 1], play: '' },
+  { tier: 'ok', name: 'Xiaomi Sound Pro', id: 'L17A', tts: [7, 3], wake: [7, 1], play: '' },
+
+  { tier: 'partial', name: '小爱音箱', id: 'L06A', tts: [5, 1], wake: [5, 2], play: '' },
+  { tier: 'partial', name: '小爱音箱 mini', id: 'LX01', tts: [5, 1], wake: [5, 2], play: '' },
+  { tier: 'partial', name: '小爱音箱 Play', id: 'L05B', tts: [5, 3], wake: [5, 1], play: '' },
+  { tier: 'partial', name: '小米小爱音箱 Play 增强版', id: 'L05C', tts: [5, 3], wake: [5, 1], play: '', note: 'MIoT 查不到播放状态' },
+  { tier: 'partial', name: '小爱音箱 Art', id: 'L09A', tts: [3, 1], wake: [3, 2], play: '' },
+  { tier: 'partial', name: '小爱触屏音箱', id: 'LX04', tts: [5, 1], wake: [5, 2], play: '' },
+  { tier: 'partial', name: 'Xiaomi 智能家庭屏 Mini', id: 'ASX4B', tts: [5, 3], wake: [5, 1], play: '' },
+  { tier: 'partial', name: 'Xiaomi 智能家庭屏 6', id: 'X6A', tts: [7, 3], wake: [7, 1], play: '' },
+  { tier: 'partial', name: 'Redmi 小爱触屏音箱 Pro 8"', id: 'X08E', tts: [7, 3], wake: [7, 1], play: '' },
+  { tier: 'partial', name: 'Xiaomi 智能家庭屏 Pro 8', id: 'X8F', tts: [7, 3], wake: [7, 1], play: '' },
+
+  { tier: 'no', name: '小米小爱音箱 HD', id: 'SM4' },
+  { tier: 'no', name: '小米小爱蓝牙音箱随身版', id: '—' },
+];
+
+function modelsCard() {
+  const badge = { ok: '<span class="mtag ok">✅ 完美</span>', partial: '<span class="mtag part">🚗 一般</span>', no: '<span class="mtag no">❌ 不支持</span>' };
+  const rows = MODELS.map((m) => {
+    const cls = m.mine ? ' class="mine"' : '';
+    const cmd = m.tts
+      ? '<code>' + m.tts.join(' / ') + '</code>'
+      : '<span style="color:var(--tx-3)">—</span>';
+    const wk = m.wake ? '<code>' + m.wake.join(' / ') + '</code>' : '<span style="color:var(--tx-3)">—</span>';
+    const pl = m.play ? '<code>' + m.play + '</code>' : '<span style="color:var(--tx-3)">—</span>';
+    const act = m.tts
+      ? '<button type="button" class="mini" data-apply="' + m.id + '">应用</button>'
+      : '';
+    return '<tr' + cls + '>' +
+      '<td>' + badge[m.tier] + '</td>' +
+      '<td>' + esc(m.name) + (m.mine ? ' <span class="yours">你正在用</span>' : '') + '</td>' +
+      '<td><b>' + m.id + '</b></td>' +
+      '<td>' + cmd + '</td>' +
+      '<td>' + wk + '</td>' +
+      '<td>' + pl + '</td>' +
+      '<td>' + act + '</td>' +
+      '</tr>';
+  }).join('');
+
+  return '<div class="subcard">' +
+    '<details class="mdl" open>' +
+    '<summary>📋 音箱适配列表 <span class="hint2">原版 MiGPT 官方数据 · 共 ' + MODELS.length + ' 款 · 点「应用」自动填指令</span></summary>' +
+    '<div class="mdlbody">' +
+    '<table class="mtbl"><thead><tr>' +
+    '<th>兼容性</th><th>名称</th><th>型号</th><th>ttsCommand</th><th>wakeUpCommand</th><th>playingCommand</th><th></th>' +
+    '</tr></thead><tbody>' + rows + '</tbody></table>' +
+    '<div id="mmsg" class="mmsg"></div>' +
+    '<div class="hint">数据来自原版 MiGPT 的 <b>docs/compatibility.md</b>。' +
+    '「应用」只会填表，<b>还要点上面的「保存」才会生效并重启引擎</b>。<br>' +
+    '连续对话需要 <b>wakeUpCommand</b> 正确；你的 <b>LX05</b> 官方标记为支持 ✅</div>' +
+    '</div></details></div>';
+}
+
+function applyModel(id) {
+  const m = MODELS.find((x) => x.id === id);
+  if (!m || !m.tts) return;
+  const setV = (p, v) => { const el = document.querySelector('[data-path="' + p + '"]'); if (el) el.value = String(v); };
+  setV('ttsAction.0', m.tts[0]); setV('ttsAction.1', m.tts[1]);
+  setV('wakeUpAction.0', m.wake[0]); setV('wakeUpAction.1', m.wake[1]);
+  if (typeof markDirty === 'function') markDirty();
+  const box = $('mmsg');
+  if (box) {
+    box.className = 'mmsg ok';
+    box.innerHTML = '✅ 已把 <b>' + m.id + '</b> 的指令填入「🔧 高级」页：ttsCommand <code>' + m.tts.join(' / ') +
+      '</code>、wakeUpCommand <code>' + m.wake.join(' / ') + '</code> —— 去点「保存」生效。';
+  }
+}
+
+// 按 sec 分组，做成标签页
+const GROUPS = [];
+for (const f of SCHEMA) {
+  if (f.sec) GROUPS.push({ name: f.sec, fields: [] });
+  else if (GROUPS.length) GROUPS[GROUPS.length - 1].fields.push(f);
+}
+// 把适配列表挂到「音箱连接」标签页底下
+{
+  const g = GROUPS.find((x) => x.name.includes('音箱连接'));
+  if (g) g.extraTop = modelsCard();
+}
+
+function fieldHtml(f) {
+  const id = 'f-' + f.p.replace(/\./g, '-');
+  const attrs = 'id="' + id + '" data-path="' + f.p + '" data-kind="' + f.k + '" spellcheck="false"';
+  // 长说明（获取方式这类）单独占一行，短说明跟在标题后面
+  const tipHtml = f.tip
+    ? '<span class="tip' + (f.tip.length > 40 ? ' block' : '') + '">' + esc(f.tip) + '</span>'
+    : '';
+  const title = esc(f.l) + tipHtml;
+  if (f.k === 'bool') {
+    return '<label class="chk"><input type="checkbox" ' + attrs + '>' +
+      '<span class="ct">' + esc(f.l) + tipHtml + '</span></label>';
+  }
+  if (f.k === 'textarea') {
+    return '<label>' + title + '</label><textarea ' + attrs + '></textarea>' +
+      (f.p === 'persona' ? '<div class="hint"><span id="pcount">0</span> 字 · 建议包含「30 字以内」「禁止列表/Markdown」等朗读约束</div>' : '');
+  }
+  if (f.k === 'select') {
+    return '<label>' + title + '</label><select id="' + id + '" data-path="' + f.p + '">' +
+      (f.opts || []).map(([v, t]) => '<option value="' + esc(v) + '">' + esc(t) + '</option>').join('') +
+      '</select>';
+  }
+  const type = f.k === 'secret' ? 'password' : (f.k === 'number' ? 'number' : 'text');
+  if (f.k === 'kw') {
+    return '<label>' + title + '</label>' +
+      '<div class="kwmode">' +
+        '<span class="kmlab">匹配方式</span>' +
+        '<div class="seg" data-path="kwMatch" data-kind="seg" data-value="contain">' +
+          '<button type="button" data-val="start">以触发词开头</button>' +
+          '<button type="button" data-val="contain">含触发词</button>' +
+        '</div>' +
+      '</div>' +
+      '<div id="kwlist" class="kwlist"></div>' +
+      '<div class="kwfoot">' +
+        '<button type="button" id="kwadd" class="kwadd">＋ 添加触发词</button>' +
+        '<label class="kwall"><input type="checkbox" id="kwall"><span>所有对话都交给 AI（不靠触发词）</span></label>' +
+      '</div>' +
+      '<div id="kwpreview" style="margin-top:9px"></div>';
+  }
+  return '<label>' + title + '</label><div class="row">' +
+    '<input type="' + type + '" ' + attrs + '>' +
+    (f.k === 'secret' ? '<button type="button" class="eye" data-eye="' + id + '">👁</button>' : '') +
+    '</div>';
+}
+
+// 二选一开关（触发词匹配方式）
+function renderSeg(seg) {
+  const v = seg.dataset.value === 'start' ? 'start' : 'contain';
+  seg.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.val === v));
+}
+
+function renderForm() {
+  $('tabs').innerHTML = GROUPS.map((g, i) =>
+    '<div class="tab' + (i === 0 ? ' on' : '') + '" data-tab="' + i + '">' + esc(g.name) + '</div>').join('');
+  $('form').innerHTML = GROUPS.map((g, i) =>
+    '<div class="pane' + (i === 0 ? ' on' : '') + '" data-pane="' + i + '">' +
+    (g.extraTop || '') + g.fields.map(fieldHtml).join('') + (g.extra || '') + '</div>').join('');
+
+  document.querySelectorAll('[data-apply]').forEach((b) => {
+    b.onclick = () => applyModel(b.dataset.apply);
+  });
+
+  document.querySelectorAll('.seg').forEach((seg) => {
+    seg.querySelectorAll('button').forEach((b) => {
+      b.onclick = () => {
+        seg.dataset.value = b.dataset.val;
+        renderSeg(seg);
+        markDirty();
+        updateKwStatus();
+      };
+    });
+    renderSeg(seg);
+  });
+
+  document.querySelectorAll('.tab').forEach((t) => {
+    t.onclick = () => {
+      document.querySelectorAll('.tab').forEach((x) => x.classList.remove('on'));
+      document.querySelectorAll('.pane').forEach((x) => x.classList.remove('on'));
+      t.classList.add('on');
+      const p = document.querySelector('.pane[data-pane="' + t.dataset.tab + '"]');
+      if (p) p.classList.add('on');
+    };
+  });
+
+  const cc = document.querySelectorAll('[data-path]').length + 1;   // +1 = 触发词（一栏一个，不算 data-path）
+  if ($('fcount')) $('fcount').textContent = cc + ' 项';
+
+  document.querySelectorAll('[data-eye]').forEach((b) => {
+    b.onclick = () => {
+      const el = $(b.dataset.eye);
+      el.type = el.type === 'password' ? 'text' : 'password';
+      b.textContent = el.type === 'password' ? '👁' : '🙈';
+    };
+  });
+  const addBtn = $('kwadd');
+  if (addBtn) addBtn.onclick = () => { const i = addKwRow(''); if (i) i.focus(); markDirty(); updateKwStatus(); };
+  const allChk = $('kwall');
+  if (allChk) allChk.onchange = () => { markDirty(); updateKwStatus(); };
+
+  document.querySelectorAll('[data-path]').forEach((el) => {
+    const ev = el.dataset.kind === 'bool' ? 'change' : 'input';
+    el.addEventListener(ev, () => {
+      if (el.dataset.path === 'persona') $('pcount').textContent = el.value.length;
+      markDirty();
+    });
+  });
+}
+
+// ---------------- 触发词（一栏一个）----------------
+function addKwRow(v) {
+  const box = $('kwlist'); if (!box) return null;
+  const row = document.createElement('div');
+  row.className = 'kwrow';
+  row.innerHTML = '<input class="kwitem" type="text" spellcheck="false" placeholder="例如：你">' +
+    '<button type="button" class="kwdel" title="删除这一栏">×</button>';
+  const inp = row.querySelector('.kwitem');
+  inp.value = v == null ? '' : v;
+  inp.addEventListener('input', () => { markDirty(); updateKwStatus(); });
+  inp.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); const n = addKwRow(''); if (n) n.focus(); markDirty(); updateKwStatus(); }
+  });
+  row.querySelector('.kwdel').onclick = () => { row.remove(); markDirty(); updateKwStatus(); };
+  box.appendChild(row);
+  return inp;
+}
+function renderKwRows(arr) {
+  const box = $('kwlist'); if (!box) return;
+  box.innerHTML = '';
+  const list = (Array.isArray(arr) && arr.length) ? arr : [''];
+  list.forEach((v) => addKwRow(v));
+  updateKwStatus();
+}
+function collectKw() {
+  if ($('kwall') && $('kwall').checked) return [''];
+  const vals = [...document.querySelectorAll('.kwitem')].map((i) => i.value.trim()).filter((x) => x.length);
+  return vals.length ? vals : [''];
+}
+function updateKwStatus() {
+  const box = $('kwpreview'); if (!box) return;
+  if ($('kwall') && $('kwall').checked) {
+    box.innerHTML = '<span style="color:#fcd34d;font-size:12px">⚠️ 所有对话都会交给 AI，音箱原生功能（天气、设备控制）将不再直接应答</span>';
+    return;
+  }
+  const filled = [...document.querySelectorAll('.kwitem')].filter((i) => i.value.trim()).length;
+  if (!filled) { box.innerHTML = '<span style="color:#f87171;font-size:12px">⚠️ 至少要有一个触发词</span>'; return; }
+  const segEl = document.querySelector('.seg[data-path="kwMatch"]');
+  const modeTxt = segEl && segEl.dataset.value === 'start' ? '以触发词开头' : '含触发词';
+  box.innerHTML = '<span style="color:var(--tx-3);font-size:12px">共 <b style="color:#fda4af">' + filled +
+    '</b> 个触发词 · <b style="color:var(--gold)">' + modeTxt + '</b> 才交给 AI，其余交给小爱原生应答</span>';
+}
+
+// ---------------- 表单读写 ----------------
+let editorReady = false, dirty = false;
+const markDirty = () => { dirty = true; $('dirty').classList.add('show'); };
+const clearDirty = () => { dirty = false; $('dirty').classList.remove('show'); };
+
+function fillForm(e) {
+  document.querySelectorAll('[data-path]').forEach((el) => {
+    if (el.dataset.path === 'callAIKeywords') return;   // 单独处理（一栏一个）
+    const v = get(e, el.dataset.path);
+    if (el.dataset.kind === 'bool') el.checked = !!v;
+    else if (el.dataset.kind === 'seg') {
+      el.dataset.value = v === 'start' ? 'start' : 'contain';
+      renderSeg(el);
+    }
+    else el.value = v == null ? '' : v;
+  });
+  const kw = get(e, 'callAIKeywords');
+  const arr = Array.isArray(kw) ? kw : [];
+  const isAll = arr.length === 1 && arr[0] === '';
+  if ($('kwall')) $('kwall').checked = isAll;
+  renderKwRows(isAll ? [] : arr);
+  const pc = $('pcount'), pf = $('f-persona');
+  if (pc && pf) pc.textContent = (pf.value || '').length;
+  clearDirty();
+}
+function collectForm() {
+  const out = {};
+  document.querySelectorAll('[data-path]').forEach((el) => {
+    if (el.dataset.path === 'callAIKeywords') return;   // 单独处理（一栏一个）
+    const p = el.dataset.path, kind = el.dataset.kind;
+    let v;
+    if (kind === 'bool') v = el.checked;
+    else if (kind === 'number') v = Number(el.value);
+    else if (kind === 'seg') v = el.dataset.value === 'start' ? 'start' : 'contain';
+    else v = el.value;
+    set(out, p, v);
+  });
+  set(out, 'callAIKeywords', collectKw());
+  return out;
+}
+
+// ---------------- 状态刷新 ----------------
+function hhmmss(ms) { const d = new Date(ms), p = (n) => String(n).padStart(2,'0'); return p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds()); }
+const humanSince = (s) => (!s || s === 'n/a') ? '—' : s.replace(/^\w+\s+/, '').replace(/\s+\w+$/, '');
+function dur(sec) {
+  if (sec < 60) return sec + ' 秒';
+  if (sec < 3600) return Math.floor(sec/60) + ' 分 ' + (sec%60) + ' 秒';
+  const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60);
+  return h < 24 ? h + ' 小时 ' + m + ' 分' : Math.floor(h/24) + ' 天 ' + (h%24) + ' 小时';
+}
+const cls = { '🔥':'heard','🔊':'said','🔈':'native','🤖':'native','⚠️':'warnln','❌':'warnln','✅':'sys' };
+let lastActive = null;
+
+// ---------------- 连续聊天模式 ----------------
+function renderMode(on) {
+  const bar = $('modebar');
+  if (!bar) return;
+  bar.classList.toggle('on', !!on);
+  $('modetext').textContent = on ? '连续聊天模式：已开启' : '连续聊天模式：关闭';
+  const b = $('b-mode');
+  b.textContent = on ? '关闭' : '开启';
+  b.className = on ? 'warn' : '';
+}
+async function toggleMode(on) {
+  const b = $('b-mode');
+  b.disabled = true;
+  try {
+    const j = await (await fetch('/api/mode', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ on }),
+    })).json();
+    if (j.ok) renderMode(j.on);
+  } catch (e) { console.warn('切换聊天模式失败:', e); }
+  finally { b.disabled = false; }
+}
+
+async function refresh() {
+  try {
+    const s = await (await fetch('/api/state', { cache: 'no-store' })).json();
+    const on = s.status.active === 'active';
+    $('badge').className = 'badge ' + (on ? 'on' : 'off');
+    $('badge').textContent = on ? '🟢 运行中' : '🔴 已停止';
+    $('svc').textContent = s.status.active;
+    $('pid').textContent = s.status.pid !== '0' ? s.status.pid : '—';
+    $('since').textContent = humanSince(s.status.since);
+    if (s.status.active !== lastActive) { lastActive = s.status.active; window._lastActiveChange = Date.now(); }
+    if (window._lastActiveChange) $('uptime').textContent = dur(Math.floor((Date.now() - window._lastActiveChange)/1000));
+    renderMode(s.chatMode);
+
+    if (s.editable && !editorReady) { fillForm(s.editable); editorReady = true; }
+
+    const c = $('chat');
+    if (!s.chat.length) c.innerHTML = '<div class="empty">还没有对话记录 —— 对音箱说句话试试</div>';
+    else {
+      const atBottom = c.scrollTop + c.clientHeight >= c.scrollHeight - 40;
+      c.innerHTML = s.chat.map((m) => '<div class="ln"><span class="t">' + hhmmss(m.t) + '</span>' +
+        '<span class="x ' + (cls[m.icon] || 'sys') + '">' + m.icon + ' ' + esc(m.text) + '</span></div>').join('');
+      if (atBottom) c.scrollTop = c.scrollHeight;
+    }
+  } catch (e) {
+    $('badge').className = 'badge off';
+    $('badge').textContent = '⚠️ 页面脚本出错: ' + ((e && e.message) ? e.message.slice(0, 50) : '未知错误');
+    console.error('state 刷新失败:', e);
+  }
+}
+
+// ---------------- 操作 ----------------
+async function saveConfig() {
+  const body = collectForm(), m = $('emsg');
+  const isAll = body.callAIKeywords.length === 1 && body.callAIKeywords[0] === '';
+  const warn = isAll ? '\n\n注意：所有对话都会交给 AI，音箱原生功能将不再直接应答。' : '';
+  if (!confirm('保存并重启引擎？（约 6 秒）' + warn)) return;
+  $('b-save').disabled = true;
+  m.className = 'msg'; m.textContent = '⏳ 保存中…正在重启引擎';
+  try {
+    const j = await (await fetch('/api/config', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    })).json();
+    if (j.ok) { m.className = 'msg ok'; m.textContent = '✅ 已保存，引擎启动正常（' + j.kwCount + ' 个触发词）'; editorReady = false; clearDirty(); }
+    else { m.className = 'msg err'; m.textContent = '❌ ' + (j.error || '保存失败') + (j.errors && j.errors.length ? '\n' + j.errors.join('\n') : ''); }
+  } catch (e) { m.className = 'msg err'; m.textContent = '❌ 请求失败: ' + e.message; }
+  finally { $('b-save').disabled = false; setTimeout(refresh, 500); }
+}
+
+async function rollback() {
+  if (!confirm('恢复到上一次保存前的配置，并重启引擎？')) return;
+  const m = $('emsg');
+  $('b-rollback').disabled = true; m.className = 'msg'; m.textContent = '⏳ 回滚中…';
+  try {
+    const j = await (await fetch('/api/config/rollback', { method: 'POST' })).json();
+    if (j.ok) { m.className = 'msg ok'; m.textContent = '✅ 已回滚并重启'; editorReady = false; clearDirty(); }
+    else { m.className = 'msg err'; m.textContent = '❌ ' + (j.error || '回滚失败'); }
+  } catch (e) { m.className = 'msg err'; m.textContent = '❌ 请求失败: ' + e.message; }
+  finally { $('b-rollback').disabled = false; setTimeout(refresh, 500); }
+}
+
+async function act(name, label, btn) {
+  if (name === 'stop' && !confirm('确定停止 MiGPT-X？音箱将不再响应 AI 对话。')) return;
+  const m = $('msg');
+  btn.disabled = true; m.className = 'msg'; m.textContent = '⏳ ' + label + ' 中…';
+  try {
+    const j = await (await fetch('/api/' + name, { method: 'POST' })).json();
+    if (j.ok) { m.className = 'msg ok'; m.textContent = '✅ ' + label + ' 完成' + (j.out ? '\n' + j.out : ''); }
+    else { m.className = 'msg err'; m.textContent = '❌ ' + (j.error || '失败'); }
+  } catch (e) { m.className = 'msg err'; m.textContent = '❌ 请求失败: ' + e.message; }
+  finally { btn.disabled = false; setTimeout(refresh, 800); }
+}
+
+renderForm();
+
+// 安全模式提示条
+(function initSafeBar() {
+  const sb = document.createElement('div');
+  sb.id = 'safebar';
+  sb.style.cssText = 'display:none;margin:0 0 15px;padding:14px 17px;border-radius:12px;background:rgba(240,180,41,.11);border:1px solid rgba(240,180,41,.4);color:#fde68a;font-size:12.5px;line-height:1.8';
+  document.body.prepend(sb);
+  (async function poll() {
+    try {
+      const j = await (await fetch('/api/state', { cache: 'no-store' })).json();
+      if (j.safeMode) {
+        sb.style.display = 'block';
+        sb.innerHTML = '🛡️ <b>安全模式已开启</b>：小米登录正被风控，此时重启引擎会导致音箱失联，所以<b>保存配置不再重启</b>。<br>配置照常写入；<b>对话人设的改动需要重启才生效</b>，TTS 引擎/音色的改动会<b>立即生效</b>。';
+      } else { sb.style.display = 'none'; }
+    } catch (e) {}
+    setTimeout(poll, 15000);
+  })();
+})();
+
+$('b-wakeup').onclick  = async (e) => {
+  const b = e.target; b.disabled = true; b.textContent = '👂 唤醒中…';
+  try { await fetch('/api/wakeup', { method: 'POST' }); } catch {}
+  setTimeout(() => { b.disabled = false; b.textContent = '👂 唤醒音箱'; }, 1400);
+};
+$('b-mode').onclick    = () => toggleMode(!$('modebar').classList.contains('on'));
+$('b-restart').onclick = (e) => act('restart', '重启', e.target);
+$('b-start').onclick   = (e) => act('start', '启动', e.target);
+$('b-stop').onclick    = (e) => act('stop', '停止', e.target);
+$('b-silence').onclick = (e) => act('silence', '静音音箱', e.target);
+$('b-save').onclick    = saveConfig;
+$('b-rollback').onclick = rollback;
+$('b-reload').onclick  = () => { editorReady = false; $('emsg').textContent = ''; clearDirty(); refresh(); };
+window.addEventListener('beforeunload', (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+
+window._lastActiveChange = Date.now();
+refresh();
+setInterval(refresh, 3000);
+setInterval(() => { if (window._lastActiveChange) $('uptime').textContent = dur(Math.floor((Date.now() - window._lastActiveChange)/1000)); }, 1000);
+
+</script>
+</body>
+</html>

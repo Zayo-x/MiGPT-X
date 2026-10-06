@@ -1,0 +1,61 @@
+{
+  "callAIKeywords": [
+    "请",
+    "你",
+    "小爱",
+    "讲",
+    "说",
+    "什么",
+    "为什么",
+    "我",
+    "怎么"
+  ],
+  "kwMatch": "start",
+  "persona": "你是一个说话简洁、偶尔幽默的语音助手。回答控制在两三句话内，用口语，不要用列表和markdown符号。",
+  "placeholder": "哟西",
+  "keepNativeAnswer": false,
+  "reStopBeforeReply": true,
+  "debug": false,
+  "historyMaxLength": 10,
+  "maxReplyLength": 100,
+  "ttsAction": [
+    5,
+    1
+  ],
+  "wakeUpAction": [
+    5,
+    3
+  ],
+  "tts": {
+    "enabled": true,
+    "engine": "edge",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "+0%",
+    "pitch": "+0Hz",
+    "volume": "+0%",
+    "mimoApiKey": "",
+    "mimoModel": "mimo-v2.5-tts-voicedesign",
+    "mimoStyle": "",
+    "cloneRef": "/root/tts-samples/vc2.mp3",
+    "cloneFallbackStyle": "",
+    "cloneFallbackModel": "mimo-v2.5-tts-voicedesign",
+    "cloneTimeout": 25,
+    "speed": 1.5,
+    "baseUrl": "http://192.168.1.100:36593",
+    "fallbackToBuiltin": true
+  },
+  "speaker": {
+    "did": "",
+    "userId": "",
+    "passToken": "",
+    "heartbeat": 500
+  },
+  "openai": {
+    "baseURL": "https://api.deepseek.com/v1",
+    "apiKey": "",
+    "model": "deepseek-chat",
+    "disableThinking": true,
+    "enableProxy": false,
+    "timeout": 60000
+  }
+}

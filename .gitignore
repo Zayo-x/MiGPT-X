@@ -1,0 +1,55 @@
+# ============ 依赖 ============
+node_modules/
+.pnp
+.pnp.js
+
+# ============ 环境变量 / 密钥 ============
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# ============ 敏感凭证（本地自动生成，开源勿传）============
+.mi.json
+
+# ============ 构建产物 ============
+dist/
+build/
+.next/
+out/
+.turbo/
+coverage/
+
+# ============ 日志 ============
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ============ 系统 / 编辑器 ============
+.DS_Store
+*.pem
+
+# ============ 部署平台 ============
+.vercel
+
+# ============ 本项目：本地配置与凭证（含 API Key / passToken，开源勿传）============
+# 唯一配置源，面板「保存」写的就是它，内含：
+#   openai.apiKey   DeepSeek/中转站密钥
+#   tts.mimoApiKey  小米 MiMo 密钥
+#   speaker.passToken  小米账号登录凭证
+editable.json
+editable.json.*
+
+# 面板每次保存自动生成的配置快照，内容与 editable.json 等价，同样含上述密钥
+backups/
+
+# 开发过程中留下的代码/配置备份（部分早期版本把密钥写在里面过）
+*.bak
+*.bak-*
+*.pre-*.bak
+config.js.bak
+config.js.bak-*
+config.js.pre-*.bak

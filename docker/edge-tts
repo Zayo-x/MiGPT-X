@@ -1,0 +1,75 @@
+#!/bin/bash
+# ⚠️ 文件名保留为 edge-tts 是因为引擎 config.js 里硬编码了这个路径，但内容与微软无关。
+# 作用：把引擎的 TTS 请求转发给 TTS 微服务（127.0.0.1:36594）。
+# 微服务支持两套引擎，由 editable.json 的 tts.engine 决定：
+#   clone / mimo → 小米 MiMo-V2.5-TTS（需要 API Key，复刻 3~25 秒）
+#   edge         → 微软 edge-tts（免费、无需 Key、1~2 秒）
+# 参数原样透传；服务端对空值会回落到 editable.json 里的配置。
+#
+# ⚠️⚠️ 维护陷阱：pip install edge-tts 会覆盖本文件！
+#      pip 会重新生成同名的 console script（约 174 字节的 python shim），
+#      把本脚本冲掉。执行 pip install -U edge-tts 之后，必须把本脚本写回来，
+#      否则音箱的播报会静默失效（或按 edge 命令行参数误解析）。
+#      验证方法：wc -c /root/tts-venv/bin/edge-tts  —— 小于 200 字节就是被冲了。
+CFG="${MIGPT_EDITABLE:-/root/migpt-next-2/editable.json}"
+TTS_API="${MIGPT_TTS_API:-http://127.0.0.1:36594}"
+# 超时必须比服务端最坏情况宽。MiMo 音色复刻正常 3~12 秒，但实测会偶发飙到
+# 70 秒以上；这里原来是 70，一旦飙上去 curl 就被掐断，服务端明明已经合成成功
+# 也被误判成失败，引擎随即回退成小爱内置的电子音（用户能直接听出来）。
+TTS_TIMEOUT="${MIGPT_TTS_TIMEOUT:-150}"
+# 宿主机上 node 装在 nvm 里（PATH 里没有），容器里 node 在 PATH 里
+if [ -n "$MIGPT_NODE" ]; then
+  NODE="$MIGPT_NODE"
+elif [ -x /root/.nvm/versions/node/v24.14.1/bin/node ]; then
+  NODE=/root/.nvm/versions/node/v24.14.1/bin/node
+else
+  NODE="$(command -v node || echo node)"
+fi
+
+TEXT=""; OUT=""; VOICE=""; RATE=""; PITCH=""; VOLUME=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --text)        TEXT="$2"; shift 2 ;;
+    --write-media) OUT="$2"; shift 2 ;;
+    --voice)       VOICE="$2"; shift 2 ;;
+    --rate)        RATE="$2"; shift 2 ;;
+    --pitch)       PITCH="$2"; shift 2 ;;
+    --volume)      VOLUME="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+
+# 从 editable.json 读引擎（面板在线编辑保存的就是它）
+ENGINE=$($NODE --input-type=commonjs -e "
+const fs = require('fs');
+let t = {};
+try { t = (JSON.parse(fs.readFileSync('$CFG','utf8')).tts) || {}; } catch (e) {}
+console.log(String(t.engine || 'clone'));
+" 2>/dev/null)
+[ -z "$ENGINE" ] && ENGINE='clone'
+
+NAME=$(basename "$OUT")
+# 临时文件必须唯一：引擎可能同时合成多段，写死一个名字会互相覆盖
+RESP="$(mktemp /tmp/migpt-tts-resp-XXXXXX.json)"
+trap 'rm -f "$RESP"' EXIT
+
+curl -s -G "${TTS_API}/say" \
+  --data-urlencode "text=$TEXT" \
+  --data-urlencode "name=$NAME" \
+  --data-urlencode "engine=$ENGINE" \
+  --data-urlencode "voice=$VOICE" \
+  --data-urlencode "rate=$RATE" \
+  --data-urlencode "pitch=$PITCH" \
+  --data-urlencode "volume=$VOLUME" \
+  -o "$RESP" --max-time "$TTS_TIMEOUT" 2>/dev/null
+
+# 判定成功的两个条件：服务端回了 ok:true，且它把音频写到了调用方指定的路径上
+if grep -q '"ok": *true' "$RESP" 2>/dev/null && [ -s "$OUT" ]; then
+  exit 0
+fi
+if [ ! -s "$RESP" ]; then
+  echo "TTS 服务无响应（${TTS_TIMEOUT}s 超时，engine=${ENGINE}）" >&2
+else
+  echo "TTS 服务失败(${ENGINE}): $(head -c 200 "$RESP" 2>/dev/null)" >&2
+fi
+exit 1
