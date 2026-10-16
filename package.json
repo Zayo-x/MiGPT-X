@@ -1,5 +1,6 @@
 {
   "name": "migpt-x",
+  "version": "1.0.1",
   "author": "Zayo-x",
   "private": true,
   "scripts": {

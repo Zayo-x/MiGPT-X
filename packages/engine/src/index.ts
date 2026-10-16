@@ -19,7 +19,7 @@ const kBannerASCII = `
 | $$ \\/  | $$| $$|  $$$$$$/| $$         | $$   
 |__/     |__/|__/ \\______/ |__/         |__/                         
                                                                                                                  
-    MiGPT-Next v0.0.0  by: https://del.wang
+    MiGPT-X v0.0.0  by: https://github.com/Zayo-x
 
 `.replace('0.0.0', version);
 

@@ -8,7 +8,7 @@
 
 ```
 引擎    MiGPT-X 自研（在 MiGPT 思路上重写并大幅扩展）
-版本    MiGPT-X v1.0.0
+版本    MiGPT-X v1.0.1
 部署    Ubuntu 24.04.5 · systemd 或 Docker 两种方式
 音箱    小爱音箱 Play（LX05）· 固件 1.82.10
 模型    DeepSeek（cn:deepseek-v4.1-flash）
@@ -579,7 +579,7 @@ PT=$(node -e "console.log(require('./editable.json').speaker.passToken.slice(0,3
 git log --all -p -S"$PT" --oneline
 ```
 
-> 截至 v1.0.0，git 历史中**从未**出现过这些密钥（已全量核查 ✅），
+> 截至 v1.0.1，git 历史中**从未**出现过这些密钥（已全量核查 ✅），
 > 但 `backups/` 目录里 20 个配置快照**全都含 passToken** —— 所以它必须保持被忽略。
 
 ### 安全模式
@@ -686,7 +686,7 @@ MiMo 音色复刻延迟波动很大（实测 2~25 秒）。缓解手段：
 ---
 
 <p align="center">
-  <b>MiGPT-X v1.0.0</b><br>
+  <b><a href="./CHANGELOG.md">MiGPT-X v1.0.1</a></b><br>
   <sub>作者 <a href="https://github.com/Zayo-x">Zayo-x</a> · MIT License</sub><br>
   <sub>控制台 <a href="http://192.168.1.50:36593">http://192.168.1.50:36593</a></sub>
 </p>
