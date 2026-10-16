@@ -286,17 +286,41 @@ const server = http.createServer(async (req, res) => {
       return res.end(HTML);
     }
     // 托管 TTS 生成的音频，供音箱拉取
-    if (req.method === 'GET' && url.pathname.startsWith('/tts/')) {
+    // ⚠️ 小爱音箱的播放器（User-Agent: xiaoai）取音频时会带 `Range: bytes=0-`，
+    // 必须回 206 + Content-Range。只回 200 + 全量的话它会静默放弃播放 ——
+    // 表现就是「引擎日志一切正常、音箱也确实来下载了，但就是没有声音」。
+    if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname.startsWith('/tts/')) {
       const f = path.join(TTS_DIR, path.basename(decodeURIComponent(url.pathname)));
       if (!fs.existsSync(f)) return send(404, 'not found', 'text/plain');
-      const buf = fs.readFileSync(f);
+      const size = fs.statSync(f).size;
+      const isHead = req.method === 'HEAD';
+      const m = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range || '').trim());
+      if (m && (m[1] || m[2])) {
+        const start = m[1] ? Number(m[1]) : Math.max(0, size - Number(m[2]));
+        let end = m[1] && m[2] ? Number(m[2]) : size - 1;
+        if (!Number.isFinite(start) || !Number.isFinite(end) || start > end || start >= size) {
+          res.writeHead(416, { 'Content-Range': 'bytes */' + size });
+          return res.end();
+        }
+        end = Math.min(end, size - 1);
+        res.writeHead(206, {
+          'Content-Type': 'audio/mpeg',
+          'Content-Length': end - start + 1,
+          'Content-Range': 'bytes ' + start + '-' + end + '/' + size,
+          'Accept-Ranges': 'bytes',
+          'Cache-Control': 'no-store',
+        });
+        if (isHead) return res.end();
+        return fs.createReadStream(f, { start, end }).pipe(res);
+      }
       res.writeHead(200, {
         'Content-Type': 'audio/mpeg',
-        'Content-Length': buf.length,
-        'Cache-Control': 'no-store',
+        'Content-Length': size,
         'Accept-Ranges': 'bytes',
+        'Cache-Control': 'no-store',
       });
-      return res.end(buf);
+      if (isHead) return res.end();
+      return fs.createReadStream(f).pipe(res);
     }
 
     if (req.method === 'GET' && url.pathname === '/api/state') {

@@ -20,6 +20,11 @@ const TTS_ACTION = E.ttsAction ?? [5, 1];
 const TTS_DIR = process.env.MIGPT_TTS_DIR || path.join(PANEL_DIR, 'tts');
 const EDGE_TTS = process.env.MIGPT_EDGE_TTS || '/root/tts-venv/bin/edge-tts';
 
+// ⏱️ 外接 TTS 的等待上限（秒）。原来写死 75 秒，而 MiMo 音色复刻实测会偶发飙到
+// 70 秒以上、极端情况超过 75 秒 —— 那样引擎会亲手把已经合成好的请求杀掉，
+// 然后回退成小爱内置的电子音。必须比包装脚本内部超时（同一环境变量，默认 150）更宽。
+const TTS_TIMEOUT_S = Number(process.env.MIGPT_TTS_TIMEOUT || 170);
+
 // 💬 连续聊天模式：文件存在 = 已开启。
 // 用文件而不是内存变量，是为了能随时切换、不需要重启引擎。
 const CHAT_MODE_FILE = process.env.MIGPT_CHAT_MODE_FILE || path.join(PANEL_DIR, 'chat-mode');
@@ -121,11 +126,11 @@ async function edgeTTS(text, voice, out) {
     execFile(
       EDGE_TTS,
       ['--voice', voice, '--text', text, '--rate', rate, '--pitch', pitch, '--volume', volume, '--write-media', out],
-      { timeout: 75000 },
+      { timeout: TTS_TIMEOUT_S * 1000 },
       (err) => {
         if (err) {
           const first = String(err.message || '').split('\n')[0].slice(0, 150);
-          const why = err.killed ? '（超过 75 秒上限被杀）' : (err.code ? '（' + err.code + '）' : '');
+          const why = err.killed ? `（超过 ${TTS_TIMEOUT_S} 秒上限被杀）` : (err.code ? '（' + err.code + '）' : '');
           console.warn('⚠️ TTS 生成失败' + why + ': ' + first);
         }
         resolve(!err);
